@@ -91,6 +91,23 @@ uint32_t HAL_HCD_HC_GetType(HCD_HandleTypeDef *hhcd, uint8_t chnum)
 //  - URB_NOTREADY = a NAK, NYET, or not more than a couple of repeats of some of the errors that will
 //                   become URB_ERROR if they repeat several times in a row
 //
+
+#if ARC_USB_FULL_SIZE
+void LogicUint4(uint8_t u)
+{
+  bool b0 = (u & 1);
+  bool b1 = (u & (1<<1));
+  bool b2 = (u & (1<<2));
+  bool b3 = (u & (1<<3));
+  
+  digitalWrite(PD_13, b0 ? HIGH : LOW);
+  digitalWrite(PB_4,  b1 ? HIGH : LOW);
+  digitalWrite(PB_8,  b2 ? HIGH : LOW);
+  digitalWrite(PB_9,  b3 ? HIGH : LOW);
+ 
+}
+#endif
+
 void HAL_HCD_HC_NotifyURBChange_Callback(HCD_HandleTypeDef *hhcd, uint8_t chnum, HCD_URBStateTypeDef urb_state)
 {
     USBHALHost_Private_t *priv = (USBHALHost_Private_t *)(hhcd->pData);
@@ -105,7 +122,10 @@ void HAL_HCD_HC_NotifyURBChange_Callback(HCD_HandleTypeDef *hhcd, uint8_t chnum,
     if ((addr != 0)) {
         HCTD *td = (HCTD *)addr;
 
-#if !ARC_USB_FULL_SIZE
+#if ARC_USB_FULL_SIZE
+		LogicUint4(urb_state);
+        digitalWrite(PA_7, HIGH);
+#else
         if ((type == EP_TYPE_BULK) || (type == EP_TYPE_CTRL)) {
             switch (urb_state) {
                 case URB_DONE:
@@ -169,6 +189,11 @@ void HAL_HCD_HC_NotifyURBChange_Callback(HCD_HandleTypeDef *hhcd, uint8_t chnum,
             //USB_DBG_EVENT("spurious %d %d", chnum, urb_state);
         }
     }
+#if ARC_USB_FULL_SIZE	
+    LogicUint4(0);
+    digitalWrite(PA_7, LOW);
+#endif
+
 }
 
 USBHALHost *USBHALHost::instHost;

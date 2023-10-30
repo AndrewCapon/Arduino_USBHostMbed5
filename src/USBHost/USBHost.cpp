@@ -352,6 +352,8 @@ USBHost::Lock::~Lock()
 
 void USBHost::transferCompleted(volatile uint32_t addr)
 {
+    digitalWrite(PA_3, HIGH);
+
     uint8_t state;
 
     if(addr == 0) {
@@ -408,6 +410,8 @@ void USBHost::transferCompleted(volatile uint32_t addr)
             ep->ep_queue.put((uint8_t*)1);
         }
     }
+    digitalWrite(PA_3, LOW);
+
 }
 
 USBHost * USBHost::getHostInst()
@@ -1240,7 +1244,15 @@ USB_TYPE USBHost::controlTransfer(USBDeviceConnected * dev, uint8_t requestType,
     if (length_transfer) {
         token = (write) ? TD_OUT : TD_IN;
         control->setNextToken(token);
+#if ARC_USB_FULL_SIZE
+		if(length_transfer > 64)
+          printf("OUCH\n");
+        digitalWrite(PJ_8, HIGH);
         res = addTransfer(control, (uint8_t *)buf, length_transfer);
+        digitalWrite(PJ_8, LOW);
+#else
+       res = addTransfer(control, (uint8_t *)buf, length_transfer);
+#endif
 
         if (res == USB_TYPE_PROCESSING)
 #ifdef USBHOST_OTHER
@@ -1262,7 +1274,7 @@ USB_TYPE USBHost::controlTransfer(USBDeviceConnected * dev, uint8_t requestType,
 #if DEBUG_TRANSFER
         USB_DBG_TRANSFER("CONTROL %s stage %s", (write) ? "WRITE" : "READ", control->getStateString());
         if (write) {
-            USB_DBG_TRANSFER("CONTROL WRITE buffer");
+            USB_DBG_TRANSFER("CONTROL WRITE buffer (%u)", res);
             for (int i = 0; i < control->getLengthTransferred(); i++) {
                 printf("%02X ", buf[i]);
             }
