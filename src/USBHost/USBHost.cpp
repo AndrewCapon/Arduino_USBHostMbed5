@@ -14,6 +14,7 @@
  * limitations under the License.
  */
 
+#pragma GCC optimize ("O0")
 
 #include "USBHost.h"
 #include "USBHostHub/USBHostHub.h"
@@ -145,7 +146,7 @@ void USBHost::usb_process()
 
                             devices[i].activeAddress(false);
 
-                            // get first 8 bit of device descriptor
+                            // get first 8 bytes of device descriptor
                             // and check if we deal with a hub
                             USB_DBG("usb_thread read device descriptor on dev: %p\r\n", &devices[i]);
                             res = getDeviceDescriptor(&devices[i], buf, 8);
@@ -270,16 +271,21 @@ void USBHost::usb_process()
                 case TD_PROCESSED_EVENT:
                     ep = (USBEndpoint *) ((HCTD *)usb_msg->td_addr)->ep;
                     if (usb_msg->td_state == USB_TYPE_IDLE) {
-                        USB_DBG_EVENT("call callback on td %p [ep: %p state: %s - dev: %p - %s]", usb_msg->td_addr, ep, ep->getStateString(), ep->dev, ep->dev->getName(ep->getIntfNb()));
+
+                        if (ep->getLengthTransferred())
+                          USB_DBG_EVENT("call callback on td %p [ep: %p state: %s - dev: %p - %s]", usb_msg->td_addr, ep, ep->getStateString(), ep->dev, ep->dev->getName(ep->getIntfNb()));
 
 #if DEBUG_TRANSFER
                         if (ep->getDir() == IN) {
                             buf_transfer = ep->getBufStart();
-                            printf("READ SUCCESS [%d bytes transferred - td: 0x%08X] on ep: [%p - addr: %02X]: ",  ep->getLengthTransferred(), usb_msg->td_addr, ep, ep->getAddress());
-                            for (int i = 0; i < ep->getLengthTransferred(); i++) {
-                                printf("%02X ", buf_transfer[i]);
+                            if (ep->getLengthTransferred())
+                            {
+                              printf("READ SUCCESS [%d bytes transferred - td: 0x%08X] on ep: [%p - addr: %02X]: ",  ep->getLengthTransferred(), usb_msg->td_addr, ep, ep->getAddress());
+                              for (int i = 0; i < ep->getLengthTransferred(); i++) {
+                                  printf("%02X ", buf_transfer[i]);
+                              }
+                              printf("\r\n\r\n");
                             }
-                            printf("\r\n\r\n");
                         }
 #endif
                         ep->call();
@@ -792,6 +798,7 @@ void USBHost::printList(ENDPOINT_TYPE type)
 // add a transfer on the TD linked list
 USB_TYPE USBHost::addTransfer(USBEndpoint * ed, uint8_t * buf, uint32_t len)
 {
+    
     USB_TYPE ret=USB_TYPE_PROCESSING;
     td_mutex.lock();
 
@@ -834,7 +841,8 @@ USB_TYPE USBHost::addTransfer(USBEndpoint * ed, uint8_t * buf, uint32_t len)
 #endif
 
     td_mutex.unlock();
-
+    
+    
     return ret;
 }
 
@@ -948,6 +956,7 @@ USB_TYPE USBHost::enumerate(USBDeviceConnected * dev, IUSBEnumerator* pEnumerato
         USB_DBG("Enumerate dev: %p", dev);
 
         // third step: get the whole device descriptor to see vid, pid
+        memset(data, 0xff, sizeof(data));
         res = getDeviceDescriptor(dev, data, DEVICE_DESCRIPTOR_LENGTH);
 
         if (res != USB_TYPE_OK) {
@@ -964,6 +973,8 @@ USB_TYPE USBHost::enumerate(USBDeviceConnected * dev, IUSBEnumerator* pEnumerato
 
         pEnumerator->setVidPid( data[8] | (data[9] << 8), data[10] | (data[11] << 8) );
 
+        memset(data, 0xff, sizeof(data));
+        
         res = getConfigurationDescriptor(dev, data, sizeof(data), &total_conf_descr_length);
         if (res != USB_TYPE_OK) {
             return res;
@@ -1099,8 +1110,10 @@ USB_TYPE USBHost::generalTransfer(USBDeviceConnected * dev, USBEndpoint * ep, ui
 {
 
 #if DEBUG_TRANSFER
+
     const char * type_str = (type == BULK_ENDPOINT) ? "BULK" : ((type == INTERRUPT_ENDPOINT) ? "INTERRUPT" : "ISOCHRONOUS");
-    USB_DBG_TRANSFER("----- %s %s [dev: %p - %s - hub: %d - port: %d - addr: %d - ep: %02X]------", type_str, (write) ? "WRITE" : "READ", dev, dev->getName(ep->getIntfNb()), dev->getHub(), dev->getPort(), dev->getAddress(), ep->getAddress());
+    if(type != INTERRUPT_ENDPOINT)
+      USB_DBG_TRANSFER("----- %s %s [dev: %p - %s - hub: %d - port: %d - addr: %d - ep: %02X]------", type_str, (write) ? "WRITE" : "READ", dev, dev->getName(ep->getIntfNb()), dev->getHub(), dev->getPort(), dev->getAddress(), ep->getAddress());
 #endif
 
     Lock lock(this);
@@ -1134,7 +1147,7 @@ USB_TYPE USBHost::generalTransfer(USBDeviceConnected * dev, USBEndpoint * ep, ui
     }
 
 #if DEBUG_TRANSFER
-    if (write) {
+    if (write && (type != INTERRUPT_ENDPOINT)) {
         USB_DBG_TRANSFER("%s WRITE buffer", type_str);
         for (int i = 0; i < ep->getLengthTransferred(); i++) {
             printf("%02X ", buf[i]);
@@ -1192,7 +1205,7 @@ USB_TYPE USBHost::controlTransfer(USBDeviceConnected * dev, uint8_t requestType,
     USB_DBG_TRANSFER("----- CONTROL %s [dev: %p - hub: %d - port: %d] ------", (write) ? "WRITE" : "READ", dev, dev->getHub(), dev->getPort());
 
     int length_transfer = len;
-    USB_TYPE res;
+    volatile USB_TYPE res;
     uint32_t token;
 
     control->setSpeed(dev->getSpeed());
@@ -1221,14 +1234,15 @@ USB_TYPE USBHost::controlTransfer(USBDeviceConnected * dev, uint8_t requestType,
 #ifdef USBHOST_OTHER
     {
         osEvent  event = control->ep_queue.get(TD_TIMEOUT_CTRL);
-        if (event.status == osEventTimeout) {
-            USB_DBG_TRANSFER("TIMEOUT");
-            disableList(CONTROL_ENDPOINT);
-            control->setState(USB_TYPE_ERROR);
-            control->ep_queue.get(0);
-            control->unqueueTransfer(control->getProcessedTD());
-            enableList(CONTROL_ENDPOINT);
-        }
+        // if (event.status == osEventTimeout) {
+        //     res = control->getState();
+        //     USB_DBG_TRANSFER("TIMEOUT");
+        //     disableList(CONTROL_ENDPOINT);
+        //     control->setState(USB_TYPE_ERROR);
+        //     control->ep_queue.get(0);
+        //     control->unqueueTransfer(control->getProcessedTD());
+        //     enableList(CONTROL_ENDPOINT);
+        // }
     }
 #else
         control->ep_queue.get();
@@ -1241,18 +1255,14 @@ USB_TYPE USBHost::controlTransfer(USBDeviceConnected * dev, uint8_t requestType,
         return res;
     }
 
+    if(length_transfer > 18)
+      printf("BP\n");
+
     if (length_transfer) {
         token = (write) ? TD_OUT : TD_IN;
         control->setNextToken(token);
-#if ARC_USB_FULL_SIZE
-		if(length_transfer > 64)
-          printf("OUCH\n");
-        digitalWrite(PJ_8, HIGH);
+
         res = addTransfer(control, (uint8_t *)buf, length_transfer);
-        digitalWrite(PJ_8, LOW);
-#else
-       res = addTransfer(control, (uint8_t *)buf, length_transfer);
-#endif
 
         if (res == USB_TYPE_PROCESSING)
 #ifdef USBHOST_OTHER
@@ -1293,7 +1303,7 @@ USB_TYPE USBHost::controlTransfer(USBDeviceConnected * dev, uint8_t requestType,
         }
     }
 
-    token = (write) ? TD_IN : TD_OUT;
+     token = (write) ? TD_IN : TD_OUT;
     control->setNextToken(token);
     res = addTransfer(control, NULL, 0);
     if (res == USB_TYPE_PROCESSING)
