@@ -1115,9 +1115,9 @@ USB_TYPE USBHost::interruptWrite(USBDeviceConnected * dev, USBEndpoint * ep, uin
 
 USB_TYPE USBHost::interruptRead(USBDeviceConnected * dev, USBEndpoint * ep, uint8_t * buf, uint32_t len, bool blocking)
 {
-    digitalWrite(PC_3, HIGH);
+    //digitalWrite(PC_3, HIGH);
     USB_TYPE result = generalTransfer(dev, ep, buf, len, blocking, INTERRUPT_ENDPOINT, false);
-    digitalWrite(PC_3, LOW);
+    //digitalWrite(PC_3, LOW);
     return result;
 }
 

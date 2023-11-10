@@ -171,7 +171,7 @@ void USBHALHost::tickerCallback(void)
             // set the transfer descriptor state based on the URB state
             switch(urbState)
             {
-              case URB_IDLE:
+              case URB_IDLE:  // Guessing that we must have had a URB_DONE if we are idle
               case URB_DONE:  pTransferDescriptor->state = USB_TYPE_IDLE; break;
               case URB_ERROR: pTransferDescriptor->state = USB_TYPE_ERROR; break;
               default:        pTransferDescriptor->state = USB_TYPE_PROCESSING; break; 
