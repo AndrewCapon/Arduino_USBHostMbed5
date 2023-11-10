@@ -33,6 +33,8 @@
 */
 class USBHost : public USBHALHost {
 public:
+    void KickHubs(void);
+
     /**
     * Static method to create or retrieve the single USBHost instance
     */

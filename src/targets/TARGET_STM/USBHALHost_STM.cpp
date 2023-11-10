@@ -61,6 +61,9 @@ uint32_t HAL_HCD_HC_GetMaxPacket(HCD_HandleTypeDef *hhcd, uint8_t chnum)
 
 void  HAL_HCD_EnableInt(HCD_HandleTypeDef *hhcd, uint8_t chnum)
 {
+  if(chnum == 1)
+    digitalWrite(PC_0, HIGH);
+
     USB_OTG_GlobalTypeDef *USBx = hhcd->Instance;
     USBx_HOST->HAINTMSK |= (1 << chnum);
 }
@@ -68,9 +71,13 @@ void  HAL_HCD_EnableInt(HCD_HandleTypeDef *hhcd, uint8_t chnum)
 
 void  HAL_HCD_DisableInt(HCD_HandleTypeDef *hhcd, uint8_t chnum)
 {
+  if(chnum == 1)
+    digitalWrite(PC_0, LOW);
+
     USB_OTG_GlobalTypeDef *USBx = hhcd->Instance;
     USBx_HOST->HAINTMSK &= ~(1 << chnum);
 }
+
 uint32_t HAL_HCD_HC_GetType(HCD_HandleTypeDef *hhcd, uint8_t chnum)
 {
     /*  useful for transmission */
@@ -97,6 +104,99 @@ uint32_t HAL_HCD_HC_GetType(HCD_HandleTypeDef *hhcd, uint8_t chnum)
 extern "C" void LogicUint7(uint8_t u);
 //#endif
 
+ 
+#if ARC_TICKER_BASED
+void USBHALHost::tickerCallback(void)
+{
+  HCD_HandleTypeDef    *pHcd  = (HCD_HandleTypeDef *)usb_hcca;
+  if(pHcd->State != HAL_HCD_STATE_BUSY)
+  {
+    USBHALHost_Private_t *pPriv = (USBHALHost_Private_t *)(pHcd->pData);
+
+    // 10 host channels
+    digitalWrite(PC_3, HIGH);
+    for(uint8_t uChannel=0; uChannel <11; uChannel++)
+    {
+      USB_OTG_URBStateTypeDef urbState = pHcd->hc[uChannel].urb_state;
+      LogicUint7(urbState);
+
+      HCTD    *pTransferDescriptor  = (pPriv->addr[uChannel] == 0xffffffff) ? nullptr : (HCTD *)pPriv->addr[uChannel];
+      uint32_t uEndpointType        = pHcd->hc[uChannel].ep_type;
+      uint32_t uEndpointDirection   = pHcd->hc[uChannel].ep_is_in;;
+
+      if(pTransferDescriptor)
+      {
+        if (uEndpointType == EP_TYPE_INTR)
+        {
+          // Disable the channel interupt
+          pTransferDescriptor->state = USB_TYPE_IDLE;
+          HAL_HCD_DisableInt(pHcd, uChannel);
+        } 
+        else 
+        {
+          // Handle USB NAKs
+          if(urbState == URB_NOTREADY)
+          {
+            // retry Acks imediately
+            // retry Bulk and Control after uRetryCounts ms
+            if ((uEndpointType == EP_TYPE_BULK) || (uEndpointType == EP_TYPE_CTRL)) 
+            {
+              constexpr uint32_t uRetryCount = 5;
+
+              pTransferDescriptor->retry++;
+
+              if(urbState == URB_NOTREADY)
+              {
+                volatile uint32_t transferred = HAL_HCD_HC_GetXferCount(pHcd, uChannel);
+
+                LogicUint7(0x40 + transferred);
+
+                if((pTransferDescriptor->retry == uRetryCount) || (pTransferDescriptor->size==0))
+                {
+                  // Submit the same request again, because the device wasn't ready to accept the last one
+                  // we need to be aware of any data that has already been transferred as it wont be again by the look of it.
+                  pTransferDescriptor->currBufPtr += transferred;
+                  pTransferDescriptor->size -= transferred;
+                  pTransferDescriptor->retry = 0;
+                  uint32_t uLength = pTransferDescriptor->size;
+
+                  HAL_HCD_HC_SubmitRequest(pHcd, uChannel, uEndpointDirection, uEndpointType, !pTransferDescriptor->setup, (uint8_t *) pTransferDescriptor->currBufPtr, uLength, 0);
+                  HAL_HCD_EnableInt(pHcd, uChannel);
+                }
+              }
+            }
+          }
+          else
+          {
+            // set the transfer descriptor state based on the URB state
+            switch(urbState)
+            {
+              case URB_IDLE:
+              case URB_DONE:  pTransferDescriptor->state = USB_TYPE_IDLE; break;
+              case URB_ERROR: pTransferDescriptor->state = USB_TYPE_ERROR; break;
+              default:        pTransferDescriptor->state = USB_TYPE_PROCESSING; break; 
+            }
+          }
+        }
+
+        if (pTransferDescriptor->state == USB_TYPE_IDLE) 
+        {
+          // reset retry count
+          pTransferDescriptor->retry = 0;
+
+          // Update transfer descriptor buffer pointer
+          pTransferDescriptor->currBufPtr += HAL_HCD_HC_GetXferCount(pHcd, uChannel);
+
+          // Call transferCompleted on correct object
+          void (USBHALHost::*func)(volatile uint32_t addr) = pPriv->transferCompleted;
+          (pPriv->inst->*func)(reinterpret_cast<std::uintptr_t>(pTransferDescriptor));
+        }
+      }
+    }
+  }
+  digitalWrite(PC_3, LOW);
+}
+#else
 void HAL_HCD_HC_NotifyURBChange_Callback(HCD_HandleTypeDef *hhcd, uint8_t chnum, HCD_URBStateTypeDef urb_state)
 {
     USBHALHost_Private_t *priv = (USBHALHost_Private_t *)(hhcd->pData);
@@ -113,6 +213,7 @@ void HAL_HCD_HC_NotifyURBChange_Callback(HCD_HandleTypeDef *hhcd, uint8_t chnum,
     if ((addr != 0)) {
         HCTD *td = (HCTD *)addr;
 		    LogicUint7(0x70 + urb_state);
+		    //LogicUint7(0x50 + chnum);
         digitalWrite(PA_7, HIGH);
 
 #if ARC_USB_FULL_SIZE
@@ -153,9 +254,13 @@ void HAL_HCD_HC_NotifyURBChange_Callback(HCD_HandleTypeDef *hhcd, uint8_t chnum,
                         /*  enqueue  another request */
                         td->currBufPtr += max_size;
                         td->size -= max_size;
+                        td->retry=0;
                         length = td->size <= max_size ? td->size : max_size;
+                 		    LogicUint7(0x50 + length);
                         HAL_HCD_HC_SubmitRequest(hhcd, chnum, dir, type, !td->setup, (uint8_t *) td->currBufPtr, length, 0);
                         HAL_HCD_EnableInt(hhcd, chnum);
+                        LogicUint7(0);
+                        digitalWrite(PA_7, LOW);
                         return;
                     }
                     break;
@@ -164,12 +269,15 @@ void HAL_HCD_HC_NotifyURBChange_Callback(HCD_HandleTypeDef *hhcd, uint8_t chnum,
                     if (td->retry < MAX_NOTREADY_RETRY) {
                         td->retry++;
 #endif
-                        // Submit the same request again, because the device wasn't ready to accept the last one
-                        length = td->size <= max_size ? td->size : max_size;
-                        HAL_HCD_HC_SubmitRequest(hhcd, chnum, dir, type, !td->setup, (uint8_t *) td->currBufPtr, length, 0);
-                        HAL_HCD_EnableInt(hhcd, chnum);
-                        return;
-
+                        if(((td->retry % 500) == 0) || (td->size==0) || (td->retry == 1))
+                        {
+                          // Submit the same request again, because the device wasn't ready to accept the last one
+                          length = td->size <= max_size ? td->size : max_size;
+                          HAL_HCD_HC_SubmitRequest(hhcd, chnum, dir, type, !td->setup, (uint8_t *) td->currBufPtr, length, 0);
+                          HAL_HCD_EnableInt(hhcd, chnum);
+                        }
+                        LogicUint7(0);
+                        digitalWrite(PA_7, LOW);
                         return;
 #if defined(MAX_NOTREADY_RETRY)
                     } else {
@@ -217,6 +325,7 @@ void HAL_HCD_HC_NotifyURBChange_Callback(HCD_HandleTypeDef *hhcd, uint8_t chnum,
 //#endif
 
 }
+#endif
 
 USBHALHost *USBHALHost::instHost;
 
@@ -265,6 +374,10 @@ void USBHALHost::init()
     HAL_HCD_Start((HCD_HandleTypeDef *) usb_hcca);
     NVIC_EnableIRQ(USBHAL_IRQn);
     usb_vbus(1);
+
+#endif
+
+
 }
 
 uint32_t USBHALHost::controlHeadED()
@@ -399,4 +512,4 @@ void USBHALHost::UsbIrqhandler()
 {
     HAL_HCD_IRQHandler((HCD_HandleTypeDef *)usb_hcca);
 }
-#endif
+

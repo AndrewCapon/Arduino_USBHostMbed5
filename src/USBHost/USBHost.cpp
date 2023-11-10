@@ -34,6 +34,17 @@ USBHost * USBHost::instHost = NULL;
 extern void (*mount_fnc)(void);
 extern void (*unmount_fnc)(void);
 
+void USBHost::KickHubs(void)
+{
+  for (uint8_t j = 0; j < 3; j++) 
+  {
+    if(hubs[j].connected())
+    {
+      hubs[j].rxHandler();
+    }
+  }
+}
+
 /**
 * How interrupts are processed:
 *    - new device connected:
@@ -181,6 +192,11 @@ void USBHost::usb_process()
                             res = getDeviceDescriptor(&devices[i], buf, 8);
 
                             if (res == USB_TYPE_OK) {
+                                // Call the device connected callback if registered
+                                if (nullptr != mount_fnc) {
+                                    mount_fnc();
+                                }
+                                
                                 break;
                             }
 
@@ -189,10 +205,6 @@ void USBHost::usb_process()
 
                         USB_INFO("New device connected: %p [hub: %d - port: %d]", &devices[i], usb_msg->hub, usb_msg->port);
 
-                        // Call the device connected callback if registered
-                        if (nullptr != mount_fnc) {
-                            mount_fnc();
-                        }
 
 #if MAX_HUB_NB
                         if (buf[4] == HUB_CLASS) {
@@ -1103,7 +1115,10 @@ USB_TYPE USBHost::interruptWrite(USBDeviceConnected * dev, USBEndpoint * ep, uin
 
 USB_TYPE USBHost::interruptRead(USBDeviceConnected * dev, USBEndpoint * ep, uint8_t * buf, uint32_t len, bool blocking)
 {
-    return generalTransfer(dev, ep, buf, len, blocking, INTERRUPT_ENDPOINT, false);
+    digitalWrite(PC_3, HIGH);
+    USB_TYPE result = generalTransfer(dev, ep, buf, len, blocking, INTERRUPT_ENDPOINT, false);
+    digitalWrite(PC_3, LOW);
+    return result;
 }
 
 USB_TYPE USBHost::generalTransfer(USBDeviceConnected * dev, USBEndpoint * ep, uint8_t * buf, uint32_t len, bool blocking, ENDPOINT_TYPE type, bool write)
@@ -1157,7 +1172,7 @@ USB_TYPE USBHost::generalTransfer(USBDeviceConnected * dev, USBEndpoint * ep, ui
 #endif
     res = addTransfer(ep, buf, len);
 
-    if ((blocking)&& (res == USB_TYPE_PROCESSING)) {
+    if ((blocking) && (res == USB_TYPE_PROCESSING)) {
 #ifdef USBHOST_OTHER
         osEvent  event = ep->ep_queue.get(TD_TIMEOUT);
         if (event.status == osEventTimeout) {
@@ -1234,15 +1249,15 @@ USB_TYPE USBHost::controlTransfer(USBDeviceConnected * dev, uint8_t requestType,
 #ifdef USBHOST_OTHER
     {
         osEvent  event = control->ep_queue.get(TD_TIMEOUT_CTRL);
-        // if (event.status == osEventTimeout) {
-        //     res = control->getState();
-        //     USB_DBG_TRANSFER("TIMEOUT");
-        //     disableList(CONTROL_ENDPOINT);
-        //     control->setState(USB_TYPE_ERROR);
-        //     control->ep_queue.get(0);
-        //     control->unqueueTransfer(control->getProcessedTD());
-        //     enableList(CONTROL_ENDPOINT);
-        // }
+        if (event.status == osEventTimeout) {
+            res = control->getState();
+            USB_DBG_TRANSFER("TIMEOUT");
+            disableList(CONTROL_ENDPOINT);
+            control->setState(USB_TYPE_ERROR);
+            control->ep_queue.get(0);
+            control->unqueueTransfer(control->getProcessedTD());
+            enableList(CONTROL_ENDPOINT);
+        }
     }
 #else
         control->ep_queue.get();

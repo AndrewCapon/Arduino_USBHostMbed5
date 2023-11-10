@@ -102,9 +102,9 @@ private:
     USBEndpoint * int_in;
     uint8_t nb_port;
     uint8_t hub_characteristics;
-
+public:
     void rxHandler();
-
+private:
     uint8_t buf[sizeof(HubDescriptor)];
 
     int hub_intf;
