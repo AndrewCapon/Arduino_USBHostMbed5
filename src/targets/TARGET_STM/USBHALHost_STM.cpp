@@ -118,6 +118,8 @@ void USBHALHost::tickerCallback(void)
     for(uint8_t uChannel=0; uChannel <11; uChannel++)
     {
       USB_OTG_URBStateTypeDef urbState = pHcd->hc[uChannel].urb_state;
+      //USB_OTG_URBStateTypeDef urbState = ::urb_states[uChannel];
+      
       LogicUint7(urbState);
 
       HCTD    *pTransferDescriptor  = (pPriv->addr[uChannel] == 0xffffffff) ? nullptr : (HCTD *)pPriv->addr[uChannel];
@@ -171,7 +173,7 @@ void USBHALHost::tickerCallback(void)
             // set the transfer descriptor state based on the URB state
             switch(urbState)
             {
-              case URB_IDLE:  // Guessing that we must have had a URB_DONE if we are idle
+              case URB_IDLE:  pTransferDescriptor->state = USB_TYPE_IDLE; break;// Guessing that we must have had a URB_DONE if we are idle
               case URB_DONE:  pTransferDescriptor->state = USB_TYPE_IDLE; break;
               case URB_ERROR: pTransferDescriptor->state = USB_TYPE_ERROR; break;
               default:        pTransferDescriptor->state = USB_TYPE_PROCESSING; break; 
@@ -196,6 +198,13 @@ void USBHALHost::tickerCallback(void)
   }
   digitalWrite(PC_3, LOW);
 }
+
+// void HAL_HCD_HC_NotifyURBChange_Callback(HCD_HandleTypeDef *hhcd, uint8_t chnum, HCD_URBStateTypeDef urb_state)
+// {
+//   if(urb_states[chnum] != URB_DONE)
+//     urb_states[chnum] = urb_state;
+// }
+
 #else
 void HAL_HCD_HC_NotifyURBChange_Callback(HCD_HandleTypeDef *hhcd, uint8_t chnum, HCD_URBStateTypeDef urb_state)
 {

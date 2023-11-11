@@ -35,8 +35,8 @@ protected:
     USBHALHost();
 
 #if ARC_TICKER_BASED
-    mbed::Ticker ms_ticker;
-
+    mbed::Ticker  ms_ticker;
+    
     void tickerCallback(void);
 #endif
 

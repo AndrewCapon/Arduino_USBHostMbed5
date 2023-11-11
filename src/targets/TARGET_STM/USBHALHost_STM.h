@@ -373,4 +373,8 @@ USBHALHost::USBHALHost()
 }
 
 
+#if ARC_TICKER_BASED
+  USB_OTG_URBStateTypeDef       urb_states[10] = {URB_IDLE};
+#endif
+
 #endif // USBHALHOST_STM_H
