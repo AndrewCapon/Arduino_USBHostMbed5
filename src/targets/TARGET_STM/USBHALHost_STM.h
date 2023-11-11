@@ -367,14 +367,14 @@ USBHALHost::USBHALHost()
     HAL_NVIC_SetPriority(USBHAL_IRQn, 0, 0);
     NVIC_SetVector(USBHAL_IRQn, (uint32_t)&_usbisr);
     
-#if ARC_TICKER_BASED
-    ms_ticker.attach_us(mbed::callback(this, &USBHALHost::tickerCallback), 1000);
-#endif
+// #if ARC_TICKER_BASED
+//     ms_ticker.attach_us(mbed::callback(this, &USBHALHost::tickerCallback), 1000);
+// #endif
 }
 
 
-#if ARC_TICKER_BASED
-  USB_OTG_URBStateTypeDef       urb_states[10] = {URB_IDLE};
-#endif
+// #if ARC_TICKER_BASED
+//   USB_OTG_URBStateTypeDef       urb_states[10] = {URB_IDLE};
+// #endif
 
 #endif // USBHALHOST_STM_H
