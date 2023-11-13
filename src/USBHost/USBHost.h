@@ -191,6 +191,15 @@ public:
         }
     }
 
+
+    /**
+     * Callback for connected device index
+     */
+    void setDeviceConnectedCallback(mbed::Callback<void(uint8_t uDeviceIndex)> callback)
+    {
+      device_connected_callback = callback;
+    }
+
     /**
      * Instantiate to protect USB thread from accessing shared objects (USBConnectedDevices and Interfaces)
      */
@@ -286,9 +295,12 @@ private:
     rtos::Mutex usb_mutex;
     rtos::Mutex td_mutex;
 
+
     // buffer for conf descriptor
     uint8_t data[415*2];
 
+    mbed::Callback<void(uint8_t uDeviceIndex)> device_connected_callback = nullptr;
+    
     /**
     * Add a transfer on the TD linked list associated to an ED
     *
@@ -392,6 +404,7 @@ private:
     /// FOR DEBUG
     /////////////////////////
     void printList(ENDPOINT_TYPE type);
+
 
 };
 

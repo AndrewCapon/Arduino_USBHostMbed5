@@ -236,6 +236,8 @@ void USBHost::usb_process()
 
                         if ((i < MAX_DEVICE_CONNECTED) && !too_many_hub) {
                             deviceInUse[i] = true;
+                            if(device_connected_callback)
+                              device_connected_callback(i);
                         }
 
                     } while(0);
@@ -983,6 +985,7 @@ USB_TYPE USBHost::enumerate(USBDeviceConnected * dev, IUSBEnumerator* pEnumerato
         dev->setPid(data[10] | (data[11] << 8));
         USB_DBG("CLASS: %02X \t VID: %04X \t PID: %04X", data[4], data[8] | (data[9] << 8), data[10] | (data[11] << 8));
 
+        pEnumerator->setEnumeratingDeviceIndex(index);
         pEnumerator->setVidPid( data[8] | (data[9] << 8), data[10] | (data[11] << 8) );
 
         memset(data, 0xff, sizeof(data));
