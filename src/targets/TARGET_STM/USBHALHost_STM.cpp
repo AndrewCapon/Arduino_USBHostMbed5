@@ -33,6 +33,10 @@
 
 #include "USBHALHost_STM.h"
 
+extern "C" void LogicPC0(uint8_t bStart);
+extern "C" void LogicPC2(uint8_t bStart);
+
+
 void HAL_HCD_Connect_Callback(HCD_HandleTypeDef *hhcd)
 {
     USBHALHost_Private_t *priv = (USBHALHost_Private_t *)(hhcd->pData);
@@ -115,7 +119,7 @@ extern "C" void LogicUint7(uint8_t u);
 
 //     // 10 host channels
 //     digitalWrite(PC_3, HIGH);
-//     for(uint8_t uChannel=0; uChannel <11; uChannel++)
+//     for(uint_fast8_t uChannel=0; uChannel <11; uChannel++)
 //     {
 //       USB_OTG_URBStateTypeDef urbState = pHcd->hc[uChannel].urb_state;
 //       //USB_OTG_URBStateTypeDef urbState = ::urb_states[uChannel];
@@ -498,6 +502,8 @@ void USBHALHost::_usbisr(void)
 
 void USBHALHost::UsbIrqhandler()
 {
+  LogicPC2(true);
+
 #if ARC_USB_FULL_SIZE
   uint32_t ch_num;
   HCD_HandleTypeDef* hhcd = (HCD_HandleTypeDef *)usb_hcca;
@@ -508,27 +514,44 @@ void USBHALHost::UsbIrqhandler()
     {
       // workaround the interrupts flood issue: re-enable NAK interrupt
       USBx_HC(ch_num)->HCINTMSK |= USB_OTG_HCINT_NAK;
+
+      // workaround the interrupts flood issue: re-enable CHH interrupt
+      USBx_HC(ch_num)->HCINTMSK |= USB_OTG_HCINT_CHH;
+      
+      LogicPC0(true);
     }
   }
+
  
   HAL_HCD_IRQHandler((HCD_HandleTypeDef *)usb_hcca);
 
   if (__HAL_HCD_GET_FLAG(hhcd, USB_OTG_GINTSTS_HCINT) && hhcd->Init.dma_enable == 0)
   {
+    LogicPC0(false);
     for (ch_num = 0; ch_num < hhcd->Init.Host_channels; ch_num++)
     {
-      if (USBx_HC(ch_num)->HCINT & USB_OTG_HCINT_NAK)
+      LogicUint7(USBx_HC(ch_num)->HCINT);
+      if ((hhcd->hc[ch_num].ep_type == EP_TYPE_CTRL) || (hhcd->hc[ch_num].ep_type == EP_TYPE_BULK))
       {
-        if ((hhcd->hc[ch_num].ep_type == EP_TYPE_CTRL) || (hhcd->hc[ch_num].ep_type == EP_TYPE_BULK))
+        if (USBx_HC(ch_num)->HCINT & USB_OTG_HCINT_NAK)
         {
           // workaround the interrupts flood issue: disable NAK interrupt
           USBx_HC(ch_num)->HCINTMSK &= ~USB_OTG_HCINT_NAK;
         }
-      }
+
+        if (USBx_HC(ch_num)->HCINT & USB_OTG_HCINT_CHH)
+        {
+          // workaround the interrupts flood issue: disable CHH interrupt
+          USBx_HC(ch_num)->HCINTMSK &= ~USB_OTG_HCINT_CHH;
+        }
+      }      
     }
   }
 #else
   HAL_HCD_IRQHandler((HCD_HandleTypeDef *)usb_hcca);
 #endif
+
+  LogicPC2(false);
+
  }
 
