@@ -72,7 +72,7 @@
 /*
 * Maximum number of interfaces of a usb device
 */
-#define MAX_INTF                    2
+#define MAX_INTF                    4
 
 /*
 * Maximum number of endpoints on each interface
