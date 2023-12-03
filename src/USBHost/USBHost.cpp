@@ -1046,6 +1046,10 @@ void USBHost::parseConfDescr(USBDeviceConnected * dev, uint8_t * conf_descr, uin
     while (index < len) {
         len_desc = conf_descr[index];
         id = conf_descr[index+1];
+
+        // let enumerator have a peek at the data
+        pEnumerator->parseConfigEntry(id, &conf_descr[index+2], len_desc-2, &conf_descr[index]);
+
         switch (id) {
             case CONFIGURATION_DESCRIPTOR:
                 USB_DBG("dev: %p has %d intf", dev, conf_descr[4]);
@@ -1091,14 +1095,17 @@ void USBHost::parseConfDescr(USBDeviceConnected * dev, uint8_t * conf_descr, uin
                 }
                 break;
             case HID_DESCRIPTOR:
-                lenReportDescr = conf_descr[index + 7] | (conf_descr[index + 8] << 8);
+                uint8_t uDescriptors = conf_descr[index + 5];
+                uint8_t *pDecriptors = &conf_descr[index + 6];
+                lenReportDescr = 0;
+                while(uDescriptors && !lenReportDescr)
+                {
+                  if (*pDecriptors == 0x22)
+                    lenReportDescr = pDecriptors[1] + static_cast<uint16_t>(pDecriptors[2]);
+                  pDecriptors+=3;
+                  uDescriptors--;
+                }
                 break;
-
-            
-            default:
-              if(parsing_intf)
-                pEnumerator->parseConfigEntry(id, conf_descr[index+2],  &conf_descr[index+3], len_desc-3);
-              break;
         }
         index += len_desc;
     }
