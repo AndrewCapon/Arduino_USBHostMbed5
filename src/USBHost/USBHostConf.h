@@ -17,6 +17,9 @@
 #ifndef USBHOST_CONF_H
 #define USBHOST_CONF_H
 
+#define ARC_USB_FULL_SIZE (1)
+#define ARC_PACKET_BASED (0)
+
 #include "mbed_config.h"
 #include "Callback.h"
 #include "Arduino.h"
@@ -146,10 +149,16 @@
 */
 #define MAX_ENDPOINT                (MAX_DEVICE_CONNECTED * MAX_INTF * MAX_ENDPOINT_PER_INTERFACE)
 #endif
+
 /*
 * Maximum number of transfer descriptors that can be allocated
 */
-#define MAX_TD                      (MAX_ENDPOINT*2)
+#define MAX_TD_PER_ENDPOINT         (2)
+
+/*
+* Maximum number of transfer descriptors that can be allocated
+*/
+#define MAX_TD                      (MAX_ENDPOINT*MAX_TD_PER_ENDPOINT)
 
 /*
 * usb_thread stack size

@@ -98,7 +98,7 @@ void USBHostMIDI::rxHandler() {
                     // length shortage, ignored.
                     break;
                 }
-#if ARC_USB_FULL_SIZE
+#if ARC_USB_FULL_SIZE || ARC_PACKET_BASED
         if(buf[i])
 				  USB_INFO("MIDI MESSAGE %x, %x, %x, %x\n", buf[i], buf[i+1], buf[i+2], buf[i+3]);
 #else

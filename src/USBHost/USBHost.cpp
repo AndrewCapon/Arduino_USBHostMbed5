@@ -285,9 +285,8 @@ void USBHost::usb_process()
                 case TD_PROCESSED_EVENT:
                     ep = (USBEndpoint *) ((HCTD *)usb_msg->td_addr)->ep;
                     if (usb_msg->td_state == USB_TYPE_IDLE) {
-
-                        if (ep->getLengthTransferred())
-                          USB_DBG_EVENT("call callback on td %p [ep: %p state: %s - dev: %p - %s]", usb_msg->td_addr, ep, ep->getStateString(), ep->dev, ep->dev->getName(ep->getIntfNb()));
+//                        if (ep->getLengthTransferred())
+                          USB_DBG_EVENT("call callback [%u transferred] on td %p [ep: %p state: %s - dev: %p - %s]", ep->getLengthTransferred(), usb_msg->td_addr, ep, ep->getStateString(), ep->dev, ep->dev->getName(ep->getIntfNb()));
 
 #if DEBUG_TRANSFER
                         if (ep->getDir() == IN) {
@@ -296,6 +295,8 @@ void USBHost::usb_process()
                             {
                               printf("READ SUCCESS [%d bytes transferred - td: 0x%08X] on ep: [%p - addr: %02X]: ",  ep->getLengthTransferred(), usb_msg->td_addr, ep, ep->getAddress());
                               for (int i = 0; i < ep->getLengthTransferred(); i++) {
+                                  if (i%64 == 0)
+                                    printf("\r\n");
                                   printf("%02X ", buf_transfer[i]);
                               }
                               printf("\r\n\r\n");
@@ -622,10 +623,12 @@ USBEndpoint * USBHost::newEndpoint(ENDPOINT_TYPE type, ENDPOINT_DIRECTION dir, u
 {
     int i = 0;
     HCED * ed = (HCED *)getED();
-    HCTD* td_list[2] = { (HCTD*)getTD(), (HCTD*)getTD() };
-
-    memset((void *)td_list[0], 0x00, sizeof(HCTD));
-    memset((void *)td_list[1], 0x00, sizeof(HCTD));
+    HCTD* td_list[MAX_TD_PER_ENDPOINT];
+    for(uint_fast16_t u = 0 ; u < MAX_TD_PER_ENDPOINT; u++)
+    {
+      td_list[u] = (HCTD*)getTD();
+      memset((void *)td_list[u], 0x00, sizeof(HCTD));
+    }
 
     // search a free USBEndpoint
     for (i = 0; i < MAX_ENDPOINT; i++) {
@@ -821,7 +824,7 @@ USB_TYPE USBHost::addTransfer(USBEndpoint * ed, uint8_t * buf, uint32_t len)
     if (td == NULL) {
         return USB_TYPE_ERROR;
     }
-
+    USB_DBG("Add transfer td = %p, buf=%p, len = %lu", td, buf, len);
 #ifndef USBHOST_OTHER
     uint32_t token = (ed->isSetup() ? TD_SETUP : ( (ed->getDir() == IN) ? TD_IN : TD_OUT ));
 
@@ -1178,7 +1181,9 @@ USB_TYPE USBHost::generalTransfer(USBDeviceConnected * dev, USBEndpoint * ep, ui
 #if DEBUG_TRANSFER
     if (write && (type != INTERRUPT_ENDPOINT)) {
         USB_DBG_TRANSFER("%s WRITE buffer", type_str);
-        for (int i = 0; i < ep->getLengthTransferred(); i++) {
+        for (int i = 0; i < len; i++) {
+            if(i%64 == 0)
+              printf("\r\n");
             printf("%02X ", buf[i]);
         }
         printf("\r\n\r\n");
