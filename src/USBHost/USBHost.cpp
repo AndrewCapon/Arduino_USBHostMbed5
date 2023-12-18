@@ -19,6 +19,7 @@
 #include "USBHostHub/USBHostHub.h"
 
 #define USBHOST_OTHER
+extern "C" void LogicTrigger(void);
 
 USBHost * USBHost::instHost = NULL;
 

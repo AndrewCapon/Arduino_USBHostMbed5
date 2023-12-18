@@ -38,6 +38,9 @@ public:
     */
     static USBHost * getHostInst();
 
+    USB_TYPE TestLeds(uint8_t uByte)
+    {
+    }
     /**
     * Control read: setup stage, data stage and status stage
     *
