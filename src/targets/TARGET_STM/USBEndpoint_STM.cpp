@@ -35,7 +35,7 @@ extern void HAL_HCD_EnableInt(HCD_HandleTypeDef *hhcd, uint8_t chn_num);
 #define USBx_BASE   USB1_OTG_HS_PERIPH_BASE
 #endif
 
-void USBEndpoint::init(HCED *hced_, ENDPOINT_TYPE type_, ENDPOINT_DIRECTION dir_, uint32_t size, uint8_t ep_number, HCTD *td_list_[2])
+void USBEndpoint::init(HCED *hced_, ENDPOINT_TYPE type_, ENDPOINT_DIRECTION dir_, uint32_t size, uint8_t ep_number, HCTD *td_list_[MAX_TD_PER_ENDPOINT])
 {
     HCD_HandleTypeDef *hhcd;
     uint32_t *addr;
@@ -46,12 +46,12 @@ void USBEndpoint::init(HCED *hced_, ENDPOINT_TYPE type_, ENDPOINT_DIRECTION dir_
     setup = (type == CONTROL_ENDPOINT) ? true : false;
 
     //TDs have been allocated by the host
-    memcpy((HCTD **)td_list, td_list_, sizeof(HCTD *) * 2); //TODO: Maybe should add a param for td_list size... at least a define
-    memset(td_list_[0], 0, sizeof(HCTD));
-    memset(td_list_[1], 0, sizeof(HCTD));
-
-    td_list[0]->ep = this;
-    td_list[1]->ep = this;
+    memcpy((HCTD **)td_list, td_list_, sizeof(HCTD *) * MAX_TD_PER_ENDPOINT); 
+    for(uint_fast16_t u = 0; u < MAX_TD_PER_ENDPOINT; u++)
+    {
+      memset(td_list_[u], 0, sizeof(HCTD));
+      td_list[u]->ep = this;
+    }
 
     address = (ep_number & 0x7F) | ((dir - 1) << 7);
     this->size = size;

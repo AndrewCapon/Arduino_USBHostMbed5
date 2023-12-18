@@ -76,7 +76,7 @@
 /*
 * Maximum number of interfaces of a usb device
 */
-#define MAX_INTF                    2
+#define MAX_INTF                    4
 
 /*
 * Maximum number of endpoints on each interface
@@ -153,7 +153,12 @@
 /*
 * Maximum number of transfer descriptors that can be allocated
 */
-#define MAX_TD                      (MAX_ENDPOINT*2)
+#define MAX_TD_PER_ENDPOINT         (2)
+
+/*
+* Maximum number of transfer descriptors that can be allocated
+*/
+#define MAX_TD                      (MAX_ENDPOINT*MAX_TD_PER_ENDPOINT)
 
 /*
 * usb_thread stack size
