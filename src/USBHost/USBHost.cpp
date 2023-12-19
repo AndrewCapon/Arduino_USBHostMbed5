@@ -104,6 +104,16 @@ void USBHost::usb_process()
 #endif
                         } else {
                             hub_unplugged = false;
+                            #if defined(TARGET_GIGA)
+
+                            #define USBx_BASE   USB1_OTG_HS_PERIPH_BASE
+                            #define USBx_HPRT0      *(__IO uint32_t *)((uint32_t)USBx_BASE + USB_OTG_HOST_PORT_BASE)
+                            uint8_t pspd = ((USBx_HPRT0 & USB_OTG_HPRT_PSPD) >> 17);
+                            if (pspd == 2) {
+                                usb_msg->lowSpeed = true;
+                            }
+                            USB_DBG("HPRT Speed: %u: Low speed? %u\n", pspd, usb_msg->lowSpeed );
+                            #endif                            
                         }
 
                         if (((idx!=-1) && deviceInUse[idx] ) || ((idx == -1) && hub_unplugged)) {
@@ -126,7 +136,7 @@ void USBHost::usb_process()
                         }
 
                         if (!controlEndpointAllocated) {
-                            control = newEndpoint(CONTROL_ENDPOINT, OUT, 0x08, 0x00);
+                            control = newEndpoint(CONTROL_ENDPOINT, OUT, 0x08, 0x00, usb_msg->lowSpeed);
                             addEndpoint(NULL, 0, (USBEndpoint*)control);
                             controlEndpointAllocated = true;
                         }
@@ -599,7 +609,7 @@ USBDeviceConnected * USBHost::getDevice(uint8_t index)
 }
 
 // create an USBEndpoint descriptor. the USBEndpoint is not linked
-USBEndpoint * USBHost::newEndpoint(ENDPOINT_TYPE type, ENDPOINT_DIRECTION dir, uint32_t size, uint8_t addr)
+USBEndpoint * USBHost::newEndpoint(ENDPOINT_TYPE type, ENDPOINT_DIRECTION dir, uint32_t size, uint8_t addr, bool speed)
 {
     int i = 0;
     HCED * ed = (HCED *)getED();
@@ -614,6 +624,8 @@ USBEndpoint * USBHost::newEndpoint(ENDPOINT_TYPE type, ENDPOINT_DIRECTION dir, u
     for (i = 0; i < MAX_ENDPOINT; i++) {
         if (endpoints[i].getState() == USB_TYPE_FREE) {
             endpoints[i].init(ed, type, dir, size, addr, td_list);
+            if (speed) 
+              endpoints[i].setSpeed(speed);
             USB_DBG("USBEndpoint created (%p): type: %d, dir: %d, size: %d, addr: %d, state: %s", &endpoints[i], type, dir, size, addr, endpoints[i].getStateString());
             return &endpoints[i];
         }
@@ -659,6 +671,7 @@ bool USBHost::addEndpoint(USBDeviceConnected * dev, uint8_t intf_nb, USBEndpoint
 #endif
     // set device address in the USBEndpoint descriptor
     if (dev == NULL) {
+        ep->setSpeed(dev->getSpeed());
         ep->setDeviceAddress(0);
     } else {
         ep->setDeviceAddress(dev->getAddress());
