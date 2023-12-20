@@ -81,7 +81,7 @@
 /*
 * Maximum number of endpoints on each interface
 */
-#define MAX_ENDPOINT_PER_INTERFACE  2
+#define MAX_ENDPOINT_PER_INTERFACE  4
 
 /*
 * Maximum number of endpoint descriptors that can be allocated
