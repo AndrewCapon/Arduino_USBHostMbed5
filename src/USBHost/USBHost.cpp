@@ -671,9 +671,9 @@ bool USBHost::addEndpoint(USBDeviceConnected * dev, uint8_t intf_nb, USBEndpoint
 #endif
     // set device address in the USBEndpoint descriptor
     if (dev == NULL) {
-        ep->setSpeed(dev->getSpeed());
         ep->setDeviceAddress(0);
     } else {
+        ep->setSpeed(dev->getSpeed());
         ep->setDeviceAddress(dev->getAddress());
     }
 
