@@ -181,7 +181,7 @@ USB_TYPE USBEndpoint::queueTransfer()
 // This effects the GIGA as it has no external PHY which is required in order to run at HS.
 //
 // 1. Transmitting length larger then packetsize can cause future issues reading, the NAK nightmare.
-// 2. Receiving multiple seperate packets can lead to lost data and the need to retry.
+// 2. Receiving multiple separate packets can lead to lost data and the need to retry.
 //
 // So for transmitting we split the data into sizes of <= packet size, we initially set of a single transfer here 
 // and HAL_HCD_HC_NotifyURBChange_Callback() will then handle subsequent transfers if needed.

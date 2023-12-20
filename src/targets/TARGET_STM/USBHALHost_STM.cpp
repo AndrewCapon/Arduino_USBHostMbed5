@@ -97,7 +97,7 @@ uint32_t HAL_HCD_HC_GetType(HCD_HandleTypeDef *hhcd, uint8_t chnum)
 // This effects the GIGA as it has no external PHY which is required in order to run at HS.
 //
 // 1. Transmitting length larger then packetsize can cause future issues reading, the NAK nightmare.
-// 2. Receiving multiple seperate packets can lead to lost data and the need to retry.
+// 2. Receiving multiple separate packets can lead to lost data and the need to retry.
 //
 // So for transmitting we split the data into sizes of <= packet size and individually transfer them, only calling pPriv->transferCompleted() when all data is sent.
 // For receiving we receive all the data and call pPriv->transferCompleted().
@@ -118,7 +118,7 @@ void HAL_HCD_HC_NotifyURBChange_Callback(HCD_HandleTypeDef *pHcd, uint8_t uChann
     if ((endpointType == EP_TYPE_INTR)) 
     {
       // Disable the channel interrupt and retransfer below
-      // TOD: really this retransfer should be queued up and transfered on the SOF interupt based on interval from descriptor.
+      // TOD: really this retransfer should be queued up and transferred on the SOF interrupt based on interval from descriptor.
       pTransferDescriptor->state = USB_TYPE_IDLE ;
       HAL_HCD_DisableInt(pHcd, uChannel);
       pTransferDescriptor->currBufPtr += HAL_HCD_HC_GetXferCount(pHcd, uChannel);
