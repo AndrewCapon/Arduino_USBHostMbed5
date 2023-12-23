@@ -35,7 +35,9 @@ extern void HAL_HCD_EnableInt(HCD_HandleTypeDef *hhcd, uint8_t chn_num);
 #define USBx_BASE   USB1_OTG_HS_PERIPH_BASE
 #endif
 
+#ifdef MAX_TD_PER_ENDPOINT
 void USBEndpoint::init(HCED *hced_, ENDPOINT_TYPE type_, ENDPOINT_DIRECTION dir_, uint32_t size, uint8_t ep_number, HCTD *td_list_[MAX_TD_PER_ENDPOINT])
+
 {
     HCD_HandleTypeDef *hhcd;
     uint32_t *addr;
@@ -72,7 +74,45 @@ void USBEndpoint::init(HCED *hced_, ENDPOINT_TYPE type_, ENDPOINT_DIRECTION dir_
     state = USB_TYPE_IDLE;
     speed = false;
 }
+#else
+void USBEndpoint::init(HCED *hced_, ENDPOINT_TYPE type_, ENDPOINT_DIRECTION dir_, uint32_t size, uint8_t ep_number, HCTD *td_list_[2])
+{
+    HCD_HandleTypeDef *hhcd;
+    uint32_t *addr;
 
+    hced = hced_;
+    type = type_;
+    dir = dir_;
+    setup = (type == CONTROL_ENDPOINT) ? true : false;
+
+    //TDs have been allocated by the host
+    memcpy((HCTD **)td_list, td_list_, sizeof(HCTD *) * 2); //TODO: Maybe should add a param for td_list size... at least a define
+    memset(td_list_[0], 0, sizeof(HCTD));
+    memset(td_list_[1], 0, sizeof(HCTD));
+
+    td_list[0]->ep = this;
+    td_list[1]->ep = this;
+
+    address = (ep_number & 0x7F) | ((dir - 1) << 7);
+    this->size = size;
+    this->ep_number = ep_number;
+    transfer_len = 0;
+    transferred = 0;
+    buf_start = 0;
+    nextEp = NULL;
+
+    td_current = td_list[0];
+    td_next = td_list[1];
+    /*  remove potential post pending from previous endpoint */
+    ep_queue.get(0);
+    intf_nb = 0;
+    hhcd = (HCD_HandleTypeDef *)hced->hhcd;
+    addr = &((uint32_t *)hhcd->pData)[hced->ch_num];
+    *addr = 0;
+    state = USB_TYPE_IDLE;
+    speed = false;
+}
+#endif
 void USBEndpoint::setSize(uint32_t size)
 {
     this->size = size;
@@ -81,9 +121,14 @@ void USBEndpoint::setSize(uint32_t size)
 
 void USBEndpoint::setDeviceAddress(uint8_t addr)
 {
-    HCD_HandleTypeDef *hhcd;
+    //HCD_HandleTypeDef *hhcd;
     uint8_t hcd_speed = this->speed? HCD_DEVICE_SPEED_LOW : HCD_SPEED_FULL;
-
+    //if (this->speed) {
+    //    USB_WARN("low speed device on hub not supported");
+    //}
+    USB_DBG("%p %u %u %u %u\n", this, this->speed, HCD_SPEED_LOW, HCD_DEVICE_SPEED_LOW, hcd_speed);
+    USB_DBG("(SA)HAL_HCD_HC_Init(%p %d %d %d %d %d %lu)\n", (HCD_HandleTypeDef *)hced->hhcd, hced->ch_num, address, addr, 
+        hcd_speed,  type, size);
     HAL_HCD_HC_Init((HCD_HandleTypeDef *)hced->hhcd, hced->ch_num, address, addr, hcd_speed,  type, size);;
     this->device_address = addr;
 
@@ -91,6 +136,7 @@ void USBEndpoint::setDeviceAddress(uint8_t addr)
 
 void USBEndpoint::setSpeed(uint8_t speed)
 {
+    USB_DBG("** USBEndpoint::setSpeed(%p, %u) **\n", this, speed);
     this->speed = speed;
 }
 
@@ -139,14 +185,15 @@ void USBEndpoint::setState(USB_TYPE st)
 
         HAL_HCD_DisableInt((HCD_HandleTypeDef *)hced->hhcd, hced->ch_num);
         uint8_t hcd_speed = HCD_SPEED_FULL;
-        if (this->speed) 
-          hcd_speed = HCD_DEVICE_SPEED_LOW;
+        if (this->speed) hcd_speed = HCD_DEVICE_SPEED_LOW;
 
         // If the device seems to be gone, there is no use trying to enable the channel again
         if (nullptr != dev)
         {
             // Notice that dev->getAddress() must be used instead of device_address, because the latter will contain
             // incorrect values in certain cases
+            USB_DBG("(SS)HAL_HCD_HC_Init(%p %d %d %d %d %d %d)\n", (HCD_HandleTypeDef *)hced->hhcd, hced->ch_num, address, dev->getAddress(), 
+                hcd_speed,  type, size);
             HAL_HCD_HC_Init((HCD_HandleTypeDef *)hced->hhcd, hced->ch_num, address, dev->getAddress(), hcd_speed,  type, size);
             // HAL_HCD_HC_Init() doesn't fully enable the channel after disable above, so we do it here -->
             USBx_HC(hced->ch_num)->HCCHAR &= ~USB_OTG_HCCHAR_CHDIS;

@@ -20,6 +20,12 @@
 #define ARC_USB_FULL_SIZE (0)
 #define ARC_FS_OVER_HS (1)
 #define ARC_NO_RESUBMITREQUEST (0)
+#define ARC_HID_DESCRIPTOR (0)
+
+/*
+* Maximum number of transfer descriptors that can be allocated
+*/
+//#define MAX_TD_PER_ENDPOINT         (2)
 
 #include "mbed_config.h"
 #include "Callback.h"
@@ -150,15 +156,15 @@
 */
 #define MAX_ENDPOINT                (MAX_DEVICE_CONNECTED * MAX_INTF * MAX_ENDPOINT_PER_INTERFACE)
 #endif
-/*
-* Maximum number of transfer descriptors that can be allocated
-*/
-#define MAX_TD_PER_ENDPOINT         (2)
 
 /*
 * Maximum number of transfer descriptors that can be allocated
 */
+#ifdef MAX_TD_PER_ENDPOINT
 #define MAX_TD                      (MAX_ENDPOINT*MAX_TD_PER_ENDPOINT)
+#else
+#define MAX_TD                      (MAX_ENDPOINT*2)
+#endif
 
 /*
 * usb_thread stack size

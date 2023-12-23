@@ -83,6 +83,12 @@ void USBHost::usb_process()
 
                 // a new device has been connected
                 case DEVICE_CONNECTED_EVENT:
+                    USB_DBG("*** DEVICE_CONNECTED_EVENT: %d %d %u %p\n",
+                        usb_msg->hub,
+                        usb_msg->port,
+                        usb_msg->lowSpeed,
+                        usb_msg->hub_parent);
+
                     too_many_hub = false;
                     buf[4] = 0;
 
@@ -613,19 +619,25 @@ USBEndpoint * USBHost::newEndpoint(ENDPOINT_TYPE type, ENDPOINT_DIRECTION dir, u
 {
     int i = 0;
     HCED * ed = (HCED *)getED();
+#ifdef MAX_TD_PER_ENDPOINT
     HCTD* td_list[MAX_TD_PER_ENDPOINT];
     for(uint_fast16_t u = 0 ; u < MAX_TD_PER_ENDPOINT; u++)
     {
       td_list[u] = (HCTD*)getTD();
       memset((void *)td_list[u], 0x00, sizeof(HCTD));
     }
+#else
+	HCTD* td_list[2] = { (HCTD*)getTD(), (HCTD*)getTD() };
+
+    memset((void *)td_list[0], 0x00, sizeof(HCTD));
+    memset((void *)td_list[1], 0x00, sizeof(HCTD));
+#endif
 
     // search a free USBEndpoint
     for (i = 0; i < MAX_ENDPOINT; i++) {
         if (endpoints[i].getState() == USB_TYPE_FREE) {
             endpoints[i].init(ed, type, dir, size, addr, td_list);
-            if (speed) 
-              endpoints[i].setSpeed(speed);
+            if (speed) endpoints[i].setSpeed(speed);
             USB_DBG("USBEndpoint created (%p): type: %d, dir: %d, size: %d, addr: %d, state: %s", &endpoints[i], type, dir, size, addr, endpoints[i].getStateString());
             return &endpoints[i];
         }
@@ -1090,6 +1102,7 @@ void USBHost::parseConfDescr(USBDeviceConnected * dev, uint8_t * conf_descr, uin
                 }
                 break;
             case HID_DESCRIPTOR:
+#if ARC_HID_DESCRIPTOR
                 uint8_t uDescriptors = conf_descr[index + 5];
                 uint8_t *pDecriptors = &conf_descr[index + 6];
                 lenReportDescr = 0;
@@ -1100,6 +1113,9 @@ void USBHost::parseConfDescr(USBDeviceConnected * dev, uint8_t * conf_descr, uin
                   pDecriptors+=3;
                   uDescriptors--;
                 }
+#else
+				lenReportDescr = conf_descr[index + 7] | (conf_descr[index + 8] << 8);
+#endif
                 break;
         }
         index += len_desc;
