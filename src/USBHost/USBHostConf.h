@@ -17,8 +17,8 @@
 #ifndef USBHOST_CONF_H
 #define USBHOST_CONF_H
 
-#define ARC_USB_FULL_SIZE (0)
-#define ARC_FS_OVER_HS (1)
+#define ARC_USB_FULL_SIZE (1)
+#define ARC_FS_OVER_HS (0)
 #define ARC_NO_RESUBMITREQUEST (0)
 #define ARC_HID_DESCRIPTOR (0)
 
